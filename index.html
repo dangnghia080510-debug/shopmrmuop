@@ -457,7 +457,7 @@ async function load(id,extra){const r=db.collection('shop_users').doc(id);let d=
  if(!d.exists){await r.set({balance:0,banned:false,created:FV.serverTimestamp(),...(extra||{})});d=await r.get();if(extra)tgNotify('reg',{who:(extra.name||id)+(extra.username?' @'+extra.username:''),via:'Telegram'})}
  else if(extra){const o=d.data(),ch={};for(const k in extra)if(extra[k]!==undefined&&o[k]!==extra[k])ch[k]=extra[k];
   if(Object.keys(ch).length){await r.update(ch);d=await r.get()}}
- U={id,...d.data()};if(unsub)unsub();unsub=r.onSnapshot(s=>{if(s.exists){U={id,...s.data()};hd()}});watchTop(id)}
+ U={id,...d.data()};if(unsub)unsub();unsub=r.onSnapshot(s=>{if(s.exists){U={id,...s.data()};hd()}});watchTop(id);refreshVip()}
 function mtView(){$('#v').innerHTML=`<div class="mt"><div class="gear">⚙️</div><h2>Đang bảo trì</h2><p class="mu">${E(MT.msg||'Shop đang được nâng cấp, bạn quay lại sau ít phút nhé.')}</p><div class="r fit" style="justify-content:center;margin-top:16px"><button class="bt g s" onclick="location.reload()">Tải lại</button>${U?'':'<button class="bt gd s" onclick="auth()">Đăng nhập (admin)</button>'}</div></div>`}
 async function saveNotice(){try{await db.collection('shop_settings').doc('notice').set({text:($('#nt').value||'').trim()});toast('Đã lưu thông báo')}catch(e){toast('Lỗi: '+(e.message||e))}}
 async function saveM(on){try{await db.collection('shop_settings').doc('maint').set({on:!!on,msg:($('#mm').value||'').trim()});toast(on?'Đã bật bảo trì':'Đã tắt bảo trì');adm('mt')}catch(e){toast('Lỗi: '+(e.message||e))}}
@@ -472,7 +472,7 @@ function langControl(){return `<select class="lang-pick" aria-label="Language" o
 function setShopLang(x){SHOP_LANG=LANGS[x]?x:'vi';localStorage.setItem('shop_lang',SHOP_LANG);hd();tabs();go(TAB);toast('Language: '+SHOP_LANG.toUpperCase())}
 function hd(){
  $('#hd').innerHTML=U?`<div class="who">${avatar(U,'ring sq')}<div style="min-width:0"><div class="nm">👑<b>${E(U.name||U.id)}</b>${isAdmin()?VT:''}</div><span class="uid">ID: ${E(U.tgid||U.email||U.id)}</span></div></div>
- <div class="hr"><div class="bb"><div class="bv">${F(U.balance)}</div><span class="rl ${isAdmin()?'ad':(isBanned()?'ban':(sd()?'sl':''))}">${isAdmin()?'ADMIN':(isBanned()?'BANNED':(sd()?'RESELLERS VIP':'MEMBER'))}</span></div></div>`
+ <div class="hr"><div class="bb"><div class="bv">${F(U.balance)}</div><span class="rl ${isAdmin()?'ad':(isBanned()?'ban':(sd()?'sl':''))}">${isAdmin()?'ADMIN':(isBanned()?'BANNED':(sd()?'RESELLERS VIP':'MEMBER'))}</span>${vipBadge()}</div></div>`
  :`<div class="who"><div class="ava ring">${IC.key.replace('<svg','<svg width="22" height="22"')}</div><b style="font:900 20px var(--f)">shop 👑Mr.mướp👑</b></div><button class="login" onclick="auth()">Đăng nhập</button>`;
  $('#hd').insertAdjacentHTML('beforeend',langControl())}
 function tabs(){if(MT.on&&!isAdmin()){$('#tb').innerHTML='';return}const T=[['shop',tr('shop')],['topup',tr('topup')],['top',tr('top')],['me',tr('me')]];if(isAdmin())T.push(['admin',tr('admin')]);
@@ -565,18 +565,18 @@ async function go0(t){const v=$('#v');
   await loadSrc();P=P.concat(srcCards());
   P=P.filter(p=>stock(p)>0).map(flashP).map(sellerP);
   if(PG&&!P.some(p=>gname(p)==PG)){PG='';PS=''}
-  v.innerHTML=`<div class="pg-h"><div class="pg-i">${IC.topup}</div><div><h2>Mua Tài Khoản</h2><p>Mua Account uy tín, chất lượng</p></div></div>${SW()}${MT.on?`<div class="c" style="border-color:var(--no)"><b>🛠 Shop đang bảo trì (chỉ admin thấy shop)</b></div>`:''}${sd()?`<div class="note"><i>${IC.info}</i><span><b>Seller VIP:</b> sản phẩm nào có giá Seller sẽ hiện giá riêng cho bạn</span></div>`:''}${NT?`<div class="note gr"><i>${IC.info}</i><span>${E(NT)}</span></div>`:''}${SRC_PRICE_NOTICE?`<div class="note" style="border-color:#d99b28;background:linear-gradient(135deg,#382715,#24172a)"><i style="background:#ffb52e22;color:#ffd15d">⚠️</i><span><b style="color:#ffd15d">Cảnh báo giá nguồn tăng:</b> ${E(SRC_PRICE_NOTICE)}</span></div>`:''}<div id="sh"></div><div class="pn"><div class="pt">${IC.clock}GIAO DỊCH GẦN ĐÂY</div><div id="rc"><div class="mu">Đang tải...</div></div></div>`;
+  v.innerHTML=`<div class="pg-h"><div class="pg-i">${IC.topup}</div><div><h2>Mua Tài Khoản</h2><p>Mua Account uy tín, chất lượng</p></div></div>${SW()}${MT.on?`<div class="c" style="border-color:var(--no)"><b>🛠 Shop đang bảo trì (chỉ admin thấy shop)</b></div>`:''}${sd()?`<div class="note"><i>${IC.info}</i><span><b>Seller VIP:</b> sản phẩm nào có giá Seller sẽ hiện giá riêng cho bạn</span></div>`:''}${NT?`<div class="note gr"><i>${IC.info}</i><span>${E(NT)}</span></div>`:''}${SRC_PRICE_NOTICE?`<div class="note" style="border-color:#d99b28;background:linear-gradient(135deg,#382715,#24172a)"><i style="background:#ffb52e22;color:#ffd15d">⚠️</i><span><b style="color:#ffd15d">Cảnh báo giá nguồn tăng:</b> ${E(SRC_PRICE_NOTICE)}</span></div>`:''}<div class="note" onclick="wheelUI()" style="cursor:pointer"><i>🎡</i><span><b>Vòng quay may mắn</b> · quay miễn phí mỗi ngày</span></div><div id="sh"></div><div class="pn"><div class="pt">${IC.clock}GIAO DỊCH GẦN ĐÂY</div><div id="rc"><div class="mu">Đang tải...</div></div></div>`;
   sdraw();recent()}
  else if(t=='top')await topView();
  else if(t=='me'){if(!U)return auth();
   v.innerHTML=`<div class="c pf">${avatar(U,'ring lg')}<h2>${E(U.name||U.id)}${isAdmin()?VT:''}</h2><span class="rl ${isAdmin()?'ad':(isBanned()?'ban':(sd()?'sl':''))}">${isAdmin()?'ADMIN':(isBanned()?'BANNED':(sd()?'SELLER VIP':'MEMBER'))}</span>
   <div class="kv"><div><small>Số dư</small><b>${F(U.balance)}</b></div><div><small>${U.tgid?'Telegram ID':'Tài khoản'}</small><b style="font-size:14px;color:var(--bl)">${E(U.tgid||U.email||U.id)}</b></div></div>
-  ${U.username?`<p class="mu">@${E(U.username)}</p>`:''}
+  ${U.username?`<p class="mu">@${E(U.username)}</p>`:''}${vipLine()}
   ${U.email?`<p class="mu">✉ ${E(U.email)}</p>`:`<button class="bt g" style="margin-top:10px" onclick="linkMail()">✉ Liên kết Gmail nhận thông báo</button>`}
   <div class="r"><button class="bt s" style="flex:1" onclick="cpt('${E(U.tgid||U.email||U.id)}')">Sao chép ID</button><button class="bt gd s" style="flex:1" onclick="go('topup')">Nạp tiền</button></div>
   ${U.tgid?'':`<div class="r" style="margin-top:10px"><button class="bt g s" onclick="editPf()">✏️ Sửa hồ sơ</button><button class="bt g s" onclick="chPw()">🔑 Đổi mật khẩu</button></div>`}
   <button class="bt g" style="margin-top:10px" onclick="go('orders')">📦 Đơn hàng đã mua</button>
-  <button class="bt g" style="margin-top:10px" onclick="showRedeem()">Nhập mã giảm giá / Giftcode</button>
+  <button class="bt gd" style="margin-top:10px" onclick="wheelUI()">🎡 Vòng quay may mắn</button><button class="bt g" style="margin-top:10px" onclick="showRedeem()">Nhập mã giảm giá / Giftcode</button>
   ${inTG?'':'<button class="bt g" style="margin-top:10px;color:var(--no);border-color:var(--no)" onclick="out()">⎋ Đăng xuất</button>'}</div>`}
  else if(!U)auth();
  else if(t=='orders'){const s=await db.collection('shop_orders').where('uid','==',U.id).get();
@@ -612,12 +612,12 @@ function tpd(x){TPD=x;topView()}
 async function topView(){const v=$('#v'),
  head=`<div class="pg-h"><div class="pg-i" style="background:#4a1a5a55;border-color:#7b3a86;color:#ff4d94">${IC.top}</div><div><h2>Top Nạp</h2><p>Khách nạp nhiều nhất</p></div></div><div class="seg">${TPL.map(x=>`<button class="${TPD==x[0]?'on':''}" onclick="tpd('${x[0]}')">${x[1]}</button>`).join('')}</div>`;
  v.innerHTML=head+'<div class="empty">Đang tải...</div>';
- const s=await db.collection('shop_topups').where('status','==','approved').get();
+ await loadVipT();const s=await db.collection('shop_topups').where('status','==','approved').get();
  if(TAB!='top')return;
  const n=new Date(),lim={day:new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime(),week:Date.now()-6048e5,month:new Date(n.getFullYear(),n.getMonth(),1).getTime(),all:0}[TPD],M={};
- s.docs.forEach(d=>{const x=d.data();if(isAdm(x.uid)||!x.ts||tsMs(x)<lim)return;const a=M[x.uid]=M[x.uid]||{uid:x.uid,name:x.name||x.uid,total:0,n:0};a.total+=+x.amount||0;a.n++;a.name=x.name||a.name});
+ const ALLT={};s.docs.forEach(d=>{const x=d.data();if(!isAdm(x.uid))ALLT[x.uid]=(ALLT[x.uid]||0)+(+x.amount||0);if(isAdm(x.uid)||!x.ts||tsMs(x)<lim)return;const a=M[x.uid]=M[x.uid]||{uid:x.uid,name:x.name||x.uid,total:0,n:0};a.total+=+x.amount||0;a.n++;a.name=x.name||a.name});
  const R=Object.values(M).sort((a,b)=>b.total-a.total),top=R.slice(0,20),me=U?R.findIndex(r=>r.uid==U.id):-1,MD=['🥇','🥈','🥉'];
- v.innerHTML=head+(top.map((r,i)=>{const self=U&&r.uid==U.id;return `<div class="rk ${i==0?'top1':''} ${self?'me':''}"><div class="n">${MD[i]||i+1}</div>${avatar({name:r.name},'sm')}<div class="inf"><b>${E(r.name||r.uid)}${self?' (bạn)':''}</b><span class="mu">${r.n} lần nạp</span></div><div class="am">${F(r.total)}</div></div>`}).join('')||'<div class="empty"><b>Chưa có ai nạp</b>Hãy là người đầu tiên.</div>')+(U?`<div class="c" style="margin-top:6px">${me>=0?`📍 Hạng của bạn: <b style="color:#ff4d94">#${me+1}</b> · ${F(R[me].total)}`:'📍 Bạn chưa có lượt nạp trong kỳ này'}</div>`:'')}
+ v.innerHTML=head+(top.map((r,i)=>{const self=U&&r.uid==U.id;return `<div class="rk ${i==0?'top1':''} ${self?'me':''}"><div class="n">${MD[i]||i+1}</div>${avatar({name:r.name},'sm')}<div class="inf"><b>${E(r.name||r.uid)}${self?' (bạn)':''}${vipTag(ALLT[r.uid])}</b><span class="mu">${r.n} lần nạp</span></div><div class="am">${F(r.total)}</div></div>`}).join('')||'<div class="empty"><b>Chưa có ai nạp</b>Hãy là người đầu tiên.</div>')+(U?`<div class="c" style="margin-top:6px">${me>=0?`📍 Hạng của bạn: <b style="color:#ff4d94">#${me+1}</b> · ${F(R[me].total)}`:'📍 Bạn chưa có lượt nạp trong kỳ này'}</div>`:'')}
 function cp(b){navigator.clipboard.writeText((b.closest('.c,.m>div').querySelector('pre')).innerText).then(()=>{b.textContent='Đã sao chép';setTimeout(()=>b.textContent='Sao chép',1500)})}
 function cpt(t){navigator.clipboard.writeText(t).then(()=>toast('Đã sao chép: '+t))}
 // ---------- chọn gói & mua ----------
@@ -816,21 +816,21 @@ async function redeemCode(fromModal){const el=fromModal?$('#gc2'):$('#gc'),err=f
   toast('Nhận '+F(amt)+' từ mã '+code);if(fromModal)closeM();else el.value='';
  }catch(e){err.textContent='Lỗi: '+(e.message||e)}}
 // Telegram notification: bot token/chat ID must live on server (Cloudflare Worker/Function), never in this HTML.
-let TG_NOTIFY_ENDPOINT='';
-async function loadTelegramSettings(){try{const d=await db.collection('shop_settings').doc('telegram').get();TG_NOTIFY_ENDPOINT=d.exists?String(d.data().endpoint||'').trim():''}catch(e){}}
-async function saveTelegramSettings(){const endpoint=($('#tgendpoint').value||'').trim();if(endpoint&&!/^https:\/\//i.test(endpoint))return $('#tgerr').textContent='Webhook phải bắt đầu bằng https://';
- try{await db.collection('shop_settings').doc('telegram').set({endpoint,updated:FV.serverTimestamp()},{merge:true});TG_NOTIFY_ENDPOINT=endpoint;$('#tgerr').textContent='';toast(endpoint?'Đã lưu webhook Telegram':'Đã tắt webhook Telegram');adm('tg')}
+let TG_NOTIFY_ENDPOINT='',TG_TOKEN='',TG_CHAT='';
+async function loadTelegramSettings(){try{const d=await db.collection('shop_settings').doc('telegram').get();TG_NOTIFY_ENDPOINT=d.exists?String(d.data().endpoint||'').trim():'';{const x=d.exists?d.data():{};TG_TOKEN=String(x.token||'').trim();TG_CHAT=String(x.chat||'').trim()}}catch(e){}}
+async function saveTelegramSettings(){const endpoint=($('#tgendpoint').value||'').trim(),tok=($('#tgtoken').value||'').trim(),chat=($('#tgchat').value||'').trim();if(tok&&!/^\d+:[A-Za-z0-9_-]{20,}$/.test(tok))return $('#tgerr').textContent='Token không đúng dạng 123456:ABC...';if(endpoint&&!/^https:\/\//i.test(endpoint))return $('#tgerr').textContent='Webhook phải bắt đầu bằng https://';
+ try{await db.collection('shop_settings').doc('telegram').set({endpoint,token:tok,chat,updated:FV.serverTimestamp()},{merge:true});TG_NOTIFY_ENDPOINT=endpoint;TG_TOKEN=tok;TG_CHAT=chat;$('#tgerr').textContent='';toast('Đã lưu cấu hình Telegram');adm('tg')}
  catch(e){$('#tgerr').textContent='Không lưu được: '+(e.message||e)}}
-async function testTelegram(){if(!TG_NOTIFY_ENDPOINT)return $('#tgerr').textContent='Hãy nhập URL Worker trước';
+async function testTelegram(){const tk=($('#tgtoken')&&$('#tgtoken').value.trim())||TG_TOKEN,ch=($('#tgchat')&&$('#tgchat').value.trim())||TG_CHAT;if(tk&&ch){const ok=await tgDirect('✅ Kết nối thông báo Shop thành công',tk,ch);$('#tgerr').textContent=ok?'':'Gửi lỗi: sai Token/Chat ID hoặc chưa bấm /start với bot';return ok&&toast('Đã gửi thử tới Telegram')}if(!TG_NOTIFY_ENDPOINT)return $('#tgerr').textContent='Hãy nhập Token + Chat ID (hoặc URL Worker) trước';
  try{const r=await fetch(TG_NOTIFY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'test',message:'✅ Kết nối thông báo Shop Mr.mướp thành công'})});if(!r.ok)throw new Error('HTTP '+r.status);toast('Đã gửi thử tới Telegram');$('#tgerr').textContent=''}
  catch(e){$('#tgerr').textContent='Gửi thử thất bại: '+(e.message||e)}}
 async function notifyAdmin(msg){
  try{await db.collection('shop_notifs').add({msg,ts:FV.serverTimestamp(),read:false})}catch(e){}
- if(TG_NOTIFY_ENDPOINT){try{await fetch(TG_NOTIFY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'shop_event',message:String(msg).slice(0,3500)})})}catch(e){console.warn('Telegram notify failed',e)}}
+ if(TG_TOKEN&&TG_CHAT)tgDirect(String(msg));else if(TG_NOTIFY_ENDPOINT){try{await fetch(TG_NOTIFY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'shop_event',message:String(msg).slice(0,3500)})})}catch(e){console.warn('Telegram notify failed',e)}}
 }
 // ================= ADMIN =================
 async function adm(t){if(t)AT=t;const v=$('#v');
- const SG=[['tp','Nạp tiền'],['pr','Sản phẩm'],['sl','Kho hàng'],['us','Người dùng'],['od','Đơn hàng'],['lg','Lịch sử tiền'],['pf','Lãi lỗ'],['cd','Giftcode'],['bk','Ngân hàng'],['tg','🤖 Telegram Bot'],['mt','🛠 Bảo trì']];
+ const SG=[['tp','Nạp tiền'],['pr','Sản phẩm'],['sl','Kho hàng'],['us','Người dùng'],['od','Đơn hàng'],['lg','Lịch sử tiền'],['pf','Lãi lỗ'],['cd','Giftcode'],['bk','Ngân hàng'],['vip','👑 VIP'],['wh','🎡 Vòng quay'],['tg','🤖 Telegram Bot'],['mt','🛠 Bảo trì']];
  const seg=`<div class="seg">${SG.map(x=>`<button class="${AT==x[0]?'on':''}" onclick="adm('${x[0]}')">${x[1]}</button>`).join('')}</div>`;
  v.innerHTML=seg+'<div class="empty">Đang tải...</div>';
  if(AT=='tp'){const s=await db.collection('shop_topups').where('status','==','pending').get();
@@ -863,8 +863,10 @@ async function adm(t){if(t)AT=t;const v=$('#v');
  else if(AT=='cd'){const s=await db.collection('shop_codes').orderBy('created','desc').limit(50).get();
   const L=s.docs.map(d=>({id:d.id,...d.data()}));
   v.innerHTML=seg+`<button class="bt gd" style="margin-bottom:12px" onclick="addCode()">+ Tạo giftcode</button><div class="c">${L.map(x=>`<div class="row"><div class="inf"><b>${E(x.code)}</b><span class="mu">${F(x.amount)} · dùng ${x.used||0}${x.once?' (1 lần)':''}${x.expire?' · hết hạn '+new Date(x.expire.seconds*1000).toLocaleDateString('vi-VN'):''}</span></div><button class="bt no s" onclick="delCode('${x.id}')">Xóa</button></div>`).join('')||'<p class="mu">Chưa có mã nào.</p>'}</div>`}
+ else if(AT=='vip'){await loadVipT(1);v.innerHTML=seg+`<div class="c"><h3>👑 Mốc lên hạng VIP</h3><p class="mu">Tổng tiền đã nạp (đơn đã duyệt) đạt mốc thì lên hạng. Chỉ hiển thị hạng, không giảm giá.</p>${VIPT.map((x,i)=>`<label class="lb">VIP ${i+1} · từ (đ)</label><input class="vi" type="number" min="1" value="${x}">`).join('')}<button class="bt gd" style="margin-top:10px" onclick="saveVip()">Lưu mốc VIP</button><p id="vme" class="err"></p></div>`}
+ else if(AT=='wh'){await loadWheel();v.innerHTML=seg+`<div class="c"><h3>🎡 Vòng quay may mắn</h3><label class="lb" style="display:flex;gap:8px;align-items:center"><input id="who" type="checkbox" style="width:20px;height:20px;margin:0" ${WH.on?'checked':''}> Bật vòng quay (mỗi khách quay 1 lần/ngày)</label><p class="mu">Mỗi dòng là 1 ô: <b>số tiền|tỉ lệ</b>. Tỉ lệ càng lớn càng dễ trúng. Số tiền 0 = chúc may mắn. Từ 2 đến 12 ô.</p><textarea id="whp" rows="9">${E(WH.prizes.map(p=>p.a+'|'+p.w).join('\n'))}</textarea><button class="bt gd" style="margin-top:8px" onclick="saveWheel()">Lưu vòng quay</button><p id="whs2" class="err"></p></div>`}
  else if(AT=='tg'){await loadTelegramSettings();
-  v.innerHTML=seg+`<div class="c"><h3>🤖 Kết nối Telegram Bot</h3><p class="mu">Dán URL HTTPS của Cloudflare Worker / backend nhận thông báo. Bot Token và Chat ID phải đặt ở phần Secrets trên máy chủ, không dán trực tiếp vào HTML hoặc Firestore.</p><label class="lb">Webhook URL</label><input id="tgendpoint" type="url" placeholder="https://ten-worker.workers.dev/notify" value="${E(TG_NOTIFY_ENDPOINT)}"><button class="bt gd" style="margin-top:8px" onclick="saveTelegramSettings()">Lưu kết nối</button><button class="bt g" style="margin-top:8px" onclick="testTelegram()">Gửi tin nhắn thử</button><p id="tgerr" class="err"></p><div class="note"><i>🔒</i><span>Thông báo tự động gồm đơn nạp mới, duyệt/từ chối nạp, khách mua hàng và cảnh báo giá nguồn tăng. Không công khai Bot Token trong mã website.</span></div></div>`}
+  v.innerHTML=seg+`<div class="c"><h3>🤖 Kết nối Telegram Bot</h3><p class="mu">Tạo bot ở @BotFather để lấy Token, nhắn /start cho bot, rồi lấy Chat ID (của bạn hoặc nhóm). Điền xong bấm Lưu rồi Gửi tin nhắn thử.</p><label class="lb">Bot Token</label><input id="tgtoken" type="password" autocomplete="off" placeholder="123456:ABC..." value="${E(TG_TOKEN)}"><label class="lb">Chat ID</label><input id="tgchat" placeholder="VD: 8618983578 hoặc -100123..." value="${E(TG_CHAT)}"><label class="lb">Hoặc Webhook URL (nâng cao, an toàn hơn)</label><input id="tgendpoint" type="url" placeholder="https://ten-worker.workers.dev/notify" value="${E(TG_NOTIFY_ENDPOINT)}"><button class="bt gd" style="margin-top:8px" onclick="saveTelegramSettings()">Lưu kết nối</button><button class="bt g" style="margin-top:8px" onclick="testTelegram()">Gửi tin nhắn thử</button><p id="tgerr" class="err"></p><div class="note"><i>🔒</i><span>Thông báo tự động gồm đơn nạp mới, duyệt/từ chối nạp, khách mua hàng và cảnh báo giá nguồn tăng. Token lưu trong Firestore nên ai xem được dữ liệu web đều đọc được: hãy dùng bot riêng chỉ để gửi thông báo.</span></div></div>`}
  else if(AT=='bk'){const b=(await db.collection('shop_settings').doc('bank').get()).data()||{};
   v.innerHTML=seg+`<div class="c"><h3>Tài khoản ngân hàng nhận tiền</h3><input id="bb" placeholder="Mã NH: MB, VCB, ACB, TCB... (hoặc BIN 970422)" value="${E(b.bank||'')}"><input id="ba" placeholder="Số tài khoản" value="${E(b.acc||'')}"><input id="bo" placeholder="Chủ tài khoản" value="${E(b.owner||'')}"><button class="bt gd" style="margin-top:8px" onclick="saveB()">Lưu</button></div>`}
  else if(AT=='mt'){try{const z=await db.collection('shop_settings').doc('notice').get();NT=z.exists?String(z.data().text||''):''}catch(e){}v.innerHTML=seg+`<div class="c"><h3>🛠 Chế độ bảo trì</h3><p class="mu">Trạng thái: <b style="color:${MT.on?'var(--no)':'var(--ok)'}">${MT.on?'ĐANG BẢO TRÌ':'Đang hoạt động'}</b><br>Khi bật, khách không xem/mua/nạp được. Admin vẫn dùng bình thường.</p><label class="lb">Lời nhắn hiển thị cho khách</label><textarea id="mm" rows="3" placeholder="Ví dụ: Shop bảo trì đến 22h, mong mọi người thông cảm">${E(MT.msg||'')}</textarea><div class="r" style="margin-top:8px"><button class="bt ${MT.on?'ok':'no'}" onclick="saveM(${!MT.on})">${MT.on?'Tắt bảo trì':'Bật bảo trì'}</button><button class="bt g" onclick="saveM(${MT.on})">Lưu lời nhắn</button></div></div><div class="c"><h3>📢 Thông báo trên trang Cửa hàng</h3><p class="mu">Hiện ở thanh thông tin phía trên. Để trống = ẩn.</p><textarea id="nt" rows="2" placeholder="Ví dụ: LƯU Ý MUA SLL CHỈ NÊN MUA 80 CON 1 LẦN">${E(NT)}</textarea><button class="bt gd" style="margin-top:8px" onclick="saveNotice()">Lưu thông báo</button></div><div class="c"><h3>💱 Tỷ giá hiển thị</h3><p class="mu">Khách đổi ngôn ngữ thì tiền hiển thị theo tỷ giá này (chuyển khoản vẫn bằng VND).</p><label class="lb">1 USD = ... đ</label><input id="re" type="number" value="${RATE.en}"><label class="lb">1 CNY (¥) = ... đ</label><input id="rz" type="number" value="${RATE.zh}"><button class="bt gd" style="margin-top:8px" onclick="saveRate()">Lưu tỷ giá</button></div>`}}
@@ -1071,9 +1073,50 @@ async function saveRate(){const o={en:+$('#re').value||25000,zh:+$('#rz').value|
 function watchTop(id){if(TW)TW();let first=true;
  TW=db.collection('shop_topups').where('uid','==',id).onSnapshot(s=>{if(first){first=false;return}
   s.docChanges().forEach(c=>{if(c.type!=='modified')return;const d=c.doc.data();
-   if(d.status==='approved'){modal(`<div class="tpok"><div class="ck">✓</div><h3>Nạp tiền thành công!</h3><p>Đã cộng <b style="color:var(--ok)">${F(d.amount)}</b> vào ví của bạn.</p><button class="bt gd s" style="margin:8px auto 0;max-width:200px" onclick="closeM();go('shop')">Đi mua hàng</button></div>`);toast('+'+F(d.amount))}
+   if(d.status==='approved'){modal(`<div class="tpok"><div class="ck">✓</div><h3>Nạp tiền thành công!</h3><p>Đã cộng <b style="color:var(--ok)">${F(d.amount)}</b> vào ví của bạn.</p><button class="bt gd s" style="margin:8px auto 0;max-width:200px" onclick="closeM();go('shop')">Đi mua hàng</button></div>`);toast('+'+F(d.amount));refreshVip()}
    else if(d.status==='rejected')toast('Đơn nạp bị từ chối')})},()=>{})}
 I18N.push(["Cảnh báo giá nguồn tăng:","Source price increase warning:","货源涨价警告："],["Khôi phục tài khoản / mật khẩu","Recover account / password","找回账号 / 密码"],["Gửi mã xác nhận","Send verification code","发送验证码"],["Đang bảo trì","Under maintenance","维护中"]);I18N.forEach(r=>LD[r[0]]=r);
 document.documentElement.lang=SHOP_LANG;loadRate();
+// ===== v5: hạng VIP (chỉ hiển thị hạng, không giảm giá) =====
+let VIPT=[100000,500000,1000000,3000000,5000000,10000000,20000000,50000000],VIPL=0,UVT=0;
+const VCOL=['#9aa0b4','#4ade80','#38bdf8','#a78bfa','#f472b6','#fb923c','#facc15','#f43f5e'];
+async function loadVipT(f){if(VIPL&&!f)return;try{const d=await db.collection('shop_settings').doc('vip').get();if(d.exists&&Array.isArray(d.data().t)&&d.data().t.length==8)VIPT=d.data().t.map(Number)}catch(e){}VIPL=1}
+const vipOf=t=>VIPT.filter(x=>t>=x).length;
+const vipTag=t=>{const n=vipOf(+t||0);return n?` <span class="rl" style="color:#fff;background:linear-gradient(135deg,${VCOL[n-1]},#0007);border-color:${VCOL[n-1]};text-shadow:0 1px 2px #000a">VIP ${n}</span>`:''};
+const vipBadge=()=>U?vipTag(UVT):'';
+function vipLine(){const n=vipOf(UVT),nx=VIPT[n];return `<p class="mu" style="margin:8px 0 0">${n?vipTag(UVT)+' · ':''}Đã nạp ${F(UVT)}${nx?` · còn ${F(nx-UVT)} nữa lên VIP ${n+1}`:' · Hạng cao nhất'}</p>`}
+async function refreshVip(){if(!U)return;try{await loadVipT();const s=await db.collection('shop_topups').where('uid','==',U.id).get();
+ UVT=s.docs.reduce((a,d)=>d.data().status==='approved'?a+(+d.data().amount||0):a,0);hd();if(TAB=='me')go('me')}catch(e){}}
+async function saveVip(){const v=[...document.querySelectorAll('.vi')].map(e=>Math.round(+e.value));
+ for(let i=0;i<8;i++){if(!(v[i]>0))return $('#vme').textContent='Mỗi mốc phải lớn hơn 0';if(i&&v[i]<=v[i-1])return $('#vme').textContent='Mốc sau phải lớn hơn mốc trước'}
+ try{await db.collection('shop_settings').doc('vip').set({t:v});VIPT=v;$('#vme').textContent='';toast('Đã lưu mốc VIP')}catch(e){$('#vme').textContent='Lỗi: '+(e.message||e)}}
+// ===== v5: vòng quay may mắn =====
+let WH=null;const WH0=[{a:0,w:35},{a:500,w:25},{a:1000,w:16},{a:2000,w:10},{a:3000,w:6},{a:5000,w:4},{a:10000,w:3},{a:20000,w:1}];
+const dayKey=()=>new Date(Date.now()+7*36e5).toISOString().slice(0,10);
+async function loadWheel(){try{const d=await db.collection('shop_settings').doc('wheel').get(),x=d.exists?d.data():{};
+ WH={on:x.on!==false,prizes:(Array.isArray(x.prizes)&&x.prizes.length>=2?x.prizes:WH0).map(p=>({a:Math.max(0,+p.a||0),w:Math.max(1,+p.w||1)}))}}catch(e){WH={on:true,prizes:WH0}}}
+function whSvg(){const n=WH.prizes.length,r=140,A=2*Math.PI/n,cols=['#ff3d86','#7a1d5a','#ff8a3c','#4a1a7a','#ffb02e','#2a1238'];
+ return `<svg viewBox="-150 -150 300 300" id="whs" style="width:100%;max-width:290px;display:block;margin:auto;transition:transform 4.5s cubic-bezier(.12,.7,.1,1);filter:drop-shadow(0 10px 14px #000a)">${WH.prizes.map((p,i)=>{const a0=i*A-Math.PI/2,a1=a0+A,m=(a0+a1)/2,tx=r*.64*Math.cos(m),ty=r*.64*Math.sin(m);
+  return `<path d="M0 0L${r*Math.cos(a0)} ${r*Math.sin(a0)}A${r} ${r} 0 0 1 ${r*Math.cos(a1)} ${r*Math.sin(a1)}Z" fill="${cols[i%cols.length]}" stroke="#12061a" stroke-width="2"/><text x="${tx}" y="${ty}" fill="#fff" font-size="${n>8?10:12}" font-weight="900" text-anchor="middle" dominant-baseline="middle" transform="rotate(${m*180/Math.PI+90} ${tx} ${ty})">${p.a>0?E(F(p.a)):'🍀'}</text>`}).join('')}<circle r="17" fill="#12061a" stroke="#ffd36b" stroke-width="3"/></svg>`}
+async function wheelUI(){if(!U)return auth();await loadWheel();if(!WH.on)return toast('Vòng quay đang tắt');const done=U.lastSpin===dayKey();
+ modal(`<h3>🎡 Vòng Quay May Mắn</h3><p class="mu">Mỗi ngày quay miễn phí 1 lần, trúng tiền sẽ cộng thẳng vào ví.</p><div style="position:relative;margin:16px 0 10px"><div style="position:absolute;left:50%;top:-10px;transform:translateX(-50%);z-index:2;width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:21px solid #ffd36b;filter:drop-shadow(0 2px 3px #000a)"></div>${whSvg()}</div><p id="whr" style="text-align:center;font-weight:900;min-height:24px;margin:8px 0"></p><button id="spb" class="bt gd" onclick="doSpin()" ${done?'disabled':''}>${done?'Mai quay tiếp nhé':'Quay ngay'}</button><button class="bt g" style="margin-top:8px" onclick="closeM()">Đóng</button><p id="whe" class="err"></p>`)}
+async function doSpin(){const b=$('#spb');b.disabled=true;let pz=null,idx=0;
+ try{await db.runTransaction(async t=>{const ur=db.collection('shop_users').doc(U.id),d=(await t.get(ur)).data()||{};
+  if(d.banned)throw'Tài khoản bị khóa';if(d.lastSpin===dayKey())throw'Hôm nay bạn đã quay rồi, mai quay tiếp nhé';
+  const tot=WH.prizes.reduce((a,p)=>a+p.w,0),rnd=crypto.getRandomValues(new Uint32Array(1))[0]/4294967296*tot;let c=0;idx=WH.prizes.length-1;
+  for(let i=0;i<WH.prizes.length;i++){c+=WH.prizes[i].w;if(rnd<c){idx=i;break}}
+  pz=WH.prizes[idx];const up={lastSpin:dayKey()};if(pz.a>0)up.balance=FV.increment(pz.a);t.update(ur,up)})}
+ catch(e){const m=typeof e=='string'?e:'Lỗi, thử lại';if(/đã quay/.test(m))b.textContent='Mai quay tiếp nhé';else b.disabled=false;return $('#whe').textContent=m}
+ if(pz.a>0)logBal(U.id,pz.a,'wheel','Vòng quay may mắn',U.id);
+ const S=360/WH.prizes.length;$('#whs').style.transform=`rotate(${360*5-((idx+.5)*S+(Math.random()-.5)*S*.6)}deg)`;b.textContent='Mai quay tiếp nhé';
+ setTimeout(()=>{const r=$('#whr');if(!r)return;r.innerHTML=pz.a>0?`🎉 Bạn trúng <b style="color:var(--ok)">${F(pz.a)}</b>!`:'Chúc bạn may mắn lần sau 🍀';if(pz.a>0)toast('+'+F(pz.a))},4600)}
+async function saveWheel(){const e=$('#whs2'),L=($('#whp').value||'').split('\n').map(x=>x.trim()).filter(Boolean),P=[];
+ for(const l of L){const [a,w]=l.split('|').map(x=>Math.round(+String(x||'').replace(/[.,\s]/g,'')));if(!(a>=0)||!(w>0))return e.textContent='Sai dòng: '+l;P.push({a,w})}
+ if(P.length<2||P.length>12)return e.textContent='Cần từ 2 đến 12 ô';
+ try{await db.collection('shop_settings').doc('wheel').set({on:$('#who').checked,prizes:P});e.textContent='';toast('Đã lưu vòng quay')}catch(x){e.textContent='Lỗi: '+(x.message||x)}}
+I18N.push(["Vòng Quay May Mắn","Lucky Wheel","幸运转盘"],["Quay ngay","Spin now","立即转动"],["Mai quay tiếp nhé","Come back tomorrow","明天再来"],["Mỗi ngày quay miễn phí 1 lần, trúng tiền sẽ cộng thẳng vào ví.","One free spin per day. Prizes go straight to your wallet.","每天免费转一次，奖金直接进钱包。"],["Chúc bạn may mắn lần sau 🍀","Better luck next time 🍀","祝你下次好运 🍀"],["Hôm nay bạn đã quay rồi, mai quay tiếp nhé","You already spun today, come back tomorrow","今天已转过，明天再来"],["Vòng quay may mắn","Lucky wheel","幸运转盘"],["quay miễn phí mỗi ngày","free spin every day","每天免费转"]);
+I18N.forEach(r=>LD[r[0]]=r);
+loadVipT();
+async function tgDirect(text,tok,chat){tok=tok||TG_TOKEN;chat=chat||TG_CHAT;if(!tok||!chat)return false;try{const r=await fetch('https://api.telegram.org/bot'+tok+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chat,text:String(text).slice(0,3500),disable_web_page_preview:true})});return !!(await r.json()).ok}catch(e){return false}}
 init();
 </script></body></html>
