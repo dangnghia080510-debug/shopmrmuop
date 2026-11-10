@@ -394,7 +394,7 @@ const tg=window.Telegram&&Telegram.WebApp;
 const inTG=!!(tg&&tg.initData);
 if(tg){try{tg.ready();tg.expand();tg.setHeaderColor('#1a0824');tg.setBackgroundColor('#12061a')}catch(e){}}
 const $=s=>document.querySelector(s),
- F=n=>Number(n||0).toLocaleString('vi-VN')+'đ',
+ F=n=>money(n),
  PR=n=>Number(n)>0?F(n):'Miễn phí',
  E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let SERR='',SC=[],SM={},U=null,P=[],TAB='shop',AT='tp',AP=[],USERS=[],IMG='',PL=[],SEL=null,PF='',unsub=null,_lastCatalog=null,_errCount=0,SRC_PRICE_NOTICE='';
@@ -457,7 +457,7 @@ async function load(id,extra){const r=db.collection('shop_users').doc(id);let d=
  if(!d.exists){await r.set({balance:0,banned:false,created:FV.serverTimestamp(),...(extra||{})});d=await r.get();if(extra)tgNotify('reg',{who:(extra.name||id)+(extra.username?' @'+extra.username:''),via:'Telegram'})}
  else if(extra){const o=d.data(),ch={};for(const k in extra)if(extra[k]!==undefined&&o[k]!==extra[k])ch[k]=extra[k];
   if(Object.keys(ch).length){await r.update(ch);d=await r.get()}}
- U={id,...d.data()};if(unsub)unsub();unsub=r.onSnapshot(s=>{if(s.exists){U={id,...s.data()};hd()}})}
+ U={id,...d.data()};if(unsub)unsub();unsub=r.onSnapshot(s=>{if(s.exists){U={id,...s.data()};hd()}});watchTop(id)}
 function mtView(){$('#v').innerHTML=`<div class="mt"><div class="gear">⚙️</div><h2>Đang bảo trì</h2><p class="mu">${E(MT.msg||'Shop đang được nâng cấp, bạn quay lại sau ít phút nhé.')}</p><div class="r fit" style="justify-content:center;margin-top:16px"><button class="bt g s" onclick="location.reload()">Tải lại</button>${U?'':'<button class="bt gd s" onclick="auth()">Đăng nhập (admin)</button>'}</div></div>`}
 async function saveNotice(){try{await db.collection('shop_settings').doc('notice').set({text:($('#nt').value||'').trim()});toast('Đã lưu thông báo')}catch(e){toast('Lỗi: '+(e.message||e))}}
 async function saveM(on){try{await db.collection('shop_settings').doc('maint').set({on:!!on,msg:($('#mm').value||'').trim()});toast(on?'Đã bật bảo trì':'Đã tắt bảo trì');adm('mt')}catch(e){toast('Lỗi: '+(e.message||e))}}
@@ -477,14 +477,14 @@ function hd(){
  $('#hd').insertAdjacentHTML('beforeend',langControl())}
 function tabs(){if(MT.on&&!isAdmin()){$('#tb').innerHTML='';return}const T=[['shop',tr('shop')],['topup',tr('topup')],['top',tr('top')],['me',tr('me')]];if(isAdmin())T.push(['admin',tr('admin')]);
  $('#tb').innerHTML=T.map(x=>`<button class="${TAB==x[0]?'on':''}" onclick="go('${x[0]}')">${IC[x[0]]}${x[1]}</button>`).join('')}
-function out(){if(!confirm('Đăng xuất khỏi tài khoản?'))return;localStorage.removeItem('uid');if(unsub)unsub();U=null;hd();tabs();go('shop')}
+function out(){if(!confirm('Đăng xuất khỏi tài khoản?'))return;localStorage.removeItem('uid');if(unsub)unsub();if(TW){TW();TW=null}U=null;hd();tabs();go('shop')}
 // ---------- Gmail + mã xác nhận ----------
 async function mailApi(b){if(!MAIL_API)throw'Admin chưa cài MAIL_API trong index.html';
  const r=await fetch(MAIL_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...b,key:MAIL_KEY})});
  const j=await r.json();if(!j.ok)throw j.msg||'Lỗi gửi mail';return j}
 const gm=x=>String(x||'').trim().toLowerCase(),isGm=x=>/^[a-z0-9._+-]+@gmail\.com$/.test(x);
 async function mailNotify(type,data,email){email=email||(U&&U.email);if(!email||!MAIL_API)return;try{await mailApi({action:'notify',email,type,data})}catch(e){}}
-function buyNote(d){mailNotify('buy',d);tgNotify('buy',{...d,who:(U&&(U.name||U.email))||''})}
+function buyNote(d){notifyAdmin('🛒 '+((U&&(U.name||U.email))||'Khách')+' mua '+d.name+(d.plan?' · '+d.plan:'')+' ×'+d.qty+' = '+Fv(d.total));mailNotify('buy',d);tgNotify('buy',{...d,who:(U&&(U.name||U.email))||''})}
 async function tgNotify(type,data){if(!MAIL_API)return;try{await mailApi({action:'tg',type,data})}catch(e){}}
 let AM='login',RG=null,LK=null;
 function auth(m){AM=m||'login';RG=null;authUI()}
@@ -521,9 +521,9 @@ async function sub(){const e=$('#e'),a=gm($('#em').value),p=$('#p').value;
  if(em&&!isGm(a))return e.textContent='Gmail không hợp lệ';
  if(!em&&!/^[a-z0-9_]{3,20}$/.test(a))return e.textContent='Tên đăng nhập không hợp lệ';
  try{
-  const id=(em?'e_':'u_')+a,d=await db.collection('shop_users').doc(id).get();
+  let id=(em?'e_':'u_')+a,d=await db.collection('shop_users').doc(id).get();if(!d.exists&&em){const q=await db.collection('shop_users').where('email','==',a).limit(1).get();if(!q.empty){d=q.docs[0];id=d.id}}
   if(!d.exists)return e.textContent=em?'Gmail chưa đăng ký, hãy chuyển sang Đăng ký':'Tài khoản không tồn tại';
-  const x=d.data(),h=x.pwv==2?await sha('v2:'+a+':'+p):await sha(p);
+  const x=d.data(),h=x.pwv==2?await sha('v2:'+pwk(id)+':'+p):await sha(p);
   if(x.pw!==h)return e.textContent='Sai mật khẩu';
   if(x.banned)return e.textContent='Tài khoản đã bị khóa';
   localStorage.setItem('uid',id);await load(id);closeM();hd();tabs();go(TAB)
@@ -656,7 +656,7 @@ async function buy(){if(!U){closeM();return auth()}if(MT.on&&!isAdmin()){closeM(
   modal(`<h3>✅ Thành công</h3><p class="mu">Hàng của bạn:</p><pre>${E(got.join('\n'))}</pre><div class="r"><button class="bt g" onclick="cp(this)">Sao chép</button><button class="bt gd" onclick="closeM()">Đóng</button></div>`);
   buyNote({name:SEL.p.name,plan:(norm(SEL.p).find(x=>x.id==pid)||{}).label||'',qty,total:paid});
   // Thông báo admin nếu đơn lớn
-  if(paid>=100000)notifyAdmin('Đơn mua lớn: '+U.name+' mua '+SEL.p.name+' ×'+qty+' = '+F(paid));
+  if(paid>=100000)notifyAdmin('Đơn mua lớn: '+U.name+' mua '+SEL.p.name+' ×'+qty+' = '+Fv(paid));
   go('shop')
  }catch(e){console.error(e);$('#e').textContent=typeof e=='string'?e:'Lỗi: '+String((e&&e.message)||e).slice(0,140)}}
 // ---------- Nguồn hàng ngoài ----------
@@ -704,7 +704,7 @@ async function directCatalog(){
    const raised=[];
    out.forEach(c=>(c.items||[]).forEach(p=>{
     const old=oldMap.get(c.key+'|'+p.code),now=+p.base||+p.cost||0;
-    if(old>0&&now>old)raised.push((p.name||p.code)+': '+F(old)+' → '+F(now));
+    if(old>0&&now>old)raised.push((p.name||p.code)+': '+Fv(old)+' → '+Fv(now));
    }));
    if(raised.length){
     const msg=raised.slice(0,8).join(' · ')+(raised.length>8?' · và '+(raised.length-8)+' mục khác':'');
@@ -765,7 +765,7 @@ async function buyD(){const pl=norm(SEL.p).find(x=>x.id==SEL.pid),qty=Math.max(1
  const keys=is2?s2keys(res):(res.keys||[]).map(String);_dc=null;_errCount=0;
  try{await db.collection('shop_orders').add({uid:U.id,userName:U.name||U.username||U.email||U.id,name:SEL.p.name,plan:pl.label,qty,total,cost,profit:total-cost,keys,ts:FV.serverTimestamp()});await logBal(U.id,-total,'buy','Mua '+SEL.p.name,U.id)}catch(e){}
  buyNote({name:SEL.p.name,plan:pl.label||'',qty,total});
- if(total>=100000)notifyAdmin('Đơn mua lớn: '+U.name+' · '+SEL.p.name+' ×'+qty+' = '+F(total));
+ if(total>=100000)notifyAdmin('Đơn mua lớn: '+U.name+' · '+SEL.p.name+' ×'+qty+' = '+Fv(total));
  modal(`<h3>✅ Thành công</h3><p class="mu">Hàng của bạn:</p><pre>${E(keys.join('\n')||'(chưa có key, liên hệ admin)')}</pre><div class="r"><button class="bt g" onclick="cp(this)">Sao chép</button><button class="bt gd" onclick="closeM()">Đóng</button></div>`);go('shop')}
 // ---- QR nạp tiền: hết hạn sau 15 phút, chống spam ----
 const QRTTL=15*60*1000,p2=n=>String(n).padStart(2,'0');
@@ -779,7 +779,7 @@ function showQR(o,b){clearInterval(QT);if(QW){QW();QW=null}const end=tsMs(o)+QRT
  QW=db.collection('shop_topups').doc(o.id).onSnapshot(s=>{const d=s.data()||{};if(d.status!=='approved'&&d.status!=='rejected')return;if(QW){QW();QW=null}clearInterval(QT);const ok=d.status==='approved',am=d.amount||o.amount;
   if($('#qr'))$('#qr').innerHTML=ok?`<div class="tpok"><div class="ck">✓</div><h3>Nạp tiền thành công!</h3><p>Đã cộng <b style="color:var(--ok)">${F(am)}</b> vào ví của bạn.</p><button class="bt gd s" style="margin:8px auto 0;max-width:200px" onclick="go('shop')">Đi mua hàng</button></div>`:`<div class="tpok"><h3 style="color:var(--no)">Đơn nạp bị từ chối</h3><p class="mu">Nếu bạn đã chuyển khoản, hãy nhắn admin kèm nội dung ${E(o.note||'')}.</p></div>`;
   toast(ok?'Nạp tiền thành công +'+F(am):'Đơn nạp bị từ chối')},()=>{});
- $('#qr').innerHTML=`<img class="qr" onerror="this.outerHTML='<p style=color:var(--no)>Không tạo được ảnh QR (mã ngân hàng sai?). Hãy chuyển khoản thủ công theo thông tin bên dưới.</p>'" src="https://img.vietqr.io/image/${E(b.bank)}-${E(b.acc)}-compact2.png?amount=${o.amount}&addInfo=${E(o.note)}&accountName=${encodeURIComponent(b.owner)}"><p>Số tiền: <b>${F(o.amount)}</b><br>Nội dung CK: <b>${E(o.note)}</b><br>${E(b.bank)} - ${E(b.acc)} - ${E(b.owner)}</p><p class="mu">Chuyển đúng nội dung, admin duyệt xong tiền sẽ vào ví.</p><p>⏳ Mã hết hạn sau <b id="cd">15:00</b></p><button class="bt g s" onclick="cancelTp('${o.id}')">Hủy đơn này</button>`;
+ $('#qr').innerHTML=`<img class="qr" onerror="this.outerHTML='<p style=color:var(--no)>Không tạo được ảnh QR (mã ngân hàng sai?). Hãy chuyển khoản thủ công theo thông tin bên dưới.</p>'" src="https://img.vietqr.io/image/${E(b.bank)}-${E(b.acc)}-compact2.png?amount=${o.amount}&addInfo=${E(o.note)}&accountName=${encodeURIComponent(b.owner)}"><p>Số tiền: <b>${Fv(o.amount)}</b><br>Nội dung CK: <b>${E(o.note)}</b><br>${E(b.bank)} - ${E(b.acc)} - ${E(b.owner)}</p><p class="mu">Chuyển đúng nội dung, admin duyệt xong tiền sẽ vào ví.</p><p>⏳ Mã hết hạn sau <b id="cd">15:00</b></p><button class="bt g s" onclick="cancelTp('${o.id}')">Hủy đơn này</button>`;
  const tick=()=>{const el=$('#cd');if(!el){clearInterval(QT);return}const r=end-Date.now();
   if(r<=0){clearInterval(QT);$('#qr').innerHTML='<p style="color:var(--no)"><b>Mã QR đã hết hạn.</b> Hãy bấm Tạo mã QR để lấy mã mới. Nếu bạn đã chuyển khoản rồi, hãy nhắn admin kèm nội dung '+E(o.note)+'.</p>';return}
   el.textContent=p2(Math.floor(r/60000))+':'+p2(Math.floor(r/1000)%60)};
@@ -794,7 +794,7 @@ async function tp(){if(TPB)return;const a=+$('#a').value;if(!(a>=2000))return al
  if(hs.docs.filter(d=>Date.now()-tsMs(d.data())<3600000).length>=5)return alert('Bạn tạo quá nhiều mã nạp trong 1 giờ, vui lòng thử lại sau');
  const r=await db.collection('shop_topups').add({uid:U.id,name:U.name||U.id,amount:a,status:'pending',ts:FV.serverTimestamp()});
  const note='NAP'+r.id.slice(0,6).toUpperCase();await r.update({note});
- notifyAdmin('Đơn nạp mới: '+U.name+' · '+F(a)+' · '+note);
+ notifyAdmin('Đơn nạp mới: '+U.name+' · '+Fv(a)+' · '+note);
  showQR({id:r.id,amount:a,note},b)
  }catch(e){alert('Lỗi, thử lại')}finally{TPB=0}}
 // Giftcode / mã giảm giá
@@ -867,7 +867,7 @@ async function adm(t){if(t)AT=t;const v=$('#v');
   v.innerHTML=seg+`<div class="c"><h3>🤖 Kết nối Telegram Bot</h3><p class="mu">Dán URL HTTPS của Cloudflare Worker / backend nhận thông báo. Bot Token và Chat ID phải đặt ở phần Secrets trên máy chủ, không dán trực tiếp vào HTML hoặc Firestore.</p><label class="lb">Webhook URL</label><input id="tgendpoint" type="url" placeholder="https://ten-worker.workers.dev/notify" value="${E(TG_NOTIFY_ENDPOINT)}"><button class="bt gd" style="margin-top:8px" onclick="saveTelegramSettings()">Lưu kết nối</button><button class="bt g" style="margin-top:8px" onclick="testTelegram()">Gửi tin nhắn thử</button><p id="tgerr" class="err"></p><div class="note"><i>🔒</i><span>Thông báo tự động gồm đơn nạp mới, duyệt/từ chối nạp, khách mua hàng và cảnh báo giá nguồn tăng. Không công khai Bot Token trong mã website.</span></div></div>`}
  else if(AT=='bk'){const b=(await db.collection('shop_settings').doc('bank').get()).data()||{};
   v.innerHTML=seg+`<div class="c"><h3>Tài khoản ngân hàng nhận tiền</h3><input id="bb" placeholder="Mã NH: MB, VCB, ACB, TCB... (hoặc BIN 970422)" value="${E(b.bank||'')}"><input id="ba" placeholder="Số tài khoản" value="${E(b.acc||'')}"><input id="bo" placeholder="Chủ tài khoản" value="${E(b.owner||'')}"><button class="bt gd" style="margin-top:8px" onclick="saveB()">Lưu</button></div>`}
- else if(AT=='mt'){try{const z=await db.collection('shop_settings').doc('notice').get();NT=z.exists?String(z.data().text||''):''}catch(e){}v.innerHTML=seg+`<div class="c"><h3>🛠 Chế độ bảo trì</h3><p class="mu">Trạng thái: <b style="color:${MT.on?'var(--no)':'var(--ok)'}">${MT.on?'ĐANG BẢO TRÌ':'Đang hoạt động'}</b><br>Khi bật, khách không xem/mua/nạp được. Admin vẫn dùng bình thường.</p><label class="lb">Lời nhắn hiển thị cho khách</label><textarea id="mm" rows="3" placeholder="Ví dụ: Shop bảo trì đến 22h, mong mọi người thông cảm">${E(MT.msg||'')}</textarea><div class="r" style="margin-top:8px"><button class="bt ${MT.on?'ok':'no'}" onclick="saveM(${!MT.on})">${MT.on?'Tắt bảo trì':'Bật bảo trì'}</button><button class="bt g" onclick="saveM(${MT.on})">Lưu lời nhắn</button></div></div><div class="c"><h3>📢 Thông báo trên trang Cửa hàng</h3><p class="mu">Hiện ở thanh thông tin phía trên. Để trống = ẩn.</p><textarea id="nt" rows="2" placeholder="Ví dụ: LƯU Ý MUA SLL CHỈ NÊN MUA 80 CON 1 LẦN">${E(NT)}</textarea><button class="bt gd" style="margin-top:8px" onclick="saveNotice()">Lưu thông báo</button></div>`}}
+ else if(AT=='mt'){try{const z=await db.collection('shop_settings').doc('notice').get();NT=z.exists?String(z.data().text||''):''}catch(e){}v.innerHTML=seg+`<div class="c"><h3>🛠 Chế độ bảo trì</h3><p class="mu">Trạng thái: <b style="color:${MT.on?'var(--no)':'var(--ok)'}">${MT.on?'ĐANG BẢO TRÌ':'Đang hoạt động'}</b><br>Khi bật, khách không xem/mua/nạp được. Admin vẫn dùng bình thường.</p><label class="lb">Lời nhắn hiển thị cho khách</label><textarea id="mm" rows="3" placeholder="Ví dụ: Shop bảo trì đến 22h, mong mọi người thông cảm">${E(MT.msg||'')}</textarea><div class="r" style="margin-top:8px"><button class="bt ${MT.on?'ok':'no'}" onclick="saveM(${!MT.on})">${MT.on?'Tắt bảo trì':'Bật bảo trì'}</button><button class="bt g" onclick="saveM(${MT.on})">Lưu lời nhắn</button></div></div><div class="c"><h3>📢 Thông báo trên trang Cửa hàng</h3><p class="mu">Hiện ở thanh thông tin phía trên. Để trống = ẩn.</p><textarea id="nt" rows="2" placeholder="Ví dụ: LƯU Ý MUA SLL CHỈ NÊN MUA 80 CON 1 LẦN">${E(NT)}</textarea><button class="bt gd" style="margin-top:8px" onclick="saveNotice()">Lưu thông báo</button></div><div class="c"><h3>💱 Tỷ giá hiển thị</h3><p class="mu">Khách đổi ngôn ngữ thì tiền hiển thị theo tỷ giá này (chuyển khoản vẫn bằng VND).</p><label class="lb">1 USD = ... đ</label><input id="re" type="number" value="${RATE.en}"><label class="lb">1 CNY (¥) = ... đ</label><input id="rz" type="number" value="${RATE.zh}"><button class="bt gd" style="margin-top:8px" onclick="saveRate()">Lưu tỷ giá</button></div>`}}
 function ul(){const q=($('#uq').value||'').toLowerCase().trim();
  const L=USERS.filter(u=>(UF=='all'||(UF=='tg')==!!u.tgid)&&(!q||[u.name,u.id,u.tgid,u.username,u.email].some(x=>String(x||'').toLowerCase().includes(q))));
  $('#ul').innerHTML=L.map(u=>`<div class="row">${avatar(u,'sm')}<div class="inf"><b>${E(u.name||u.id)}${u.username?` <span class="mu">@${E(u.username)}</span>`:''}${u.banned?' <span class="rl ban">BAN</span>':''}${u.seller?' <span class="rl sl">SELLER</span>':''}</b><span class="idc" onclick="cpt('${E(u.tgid||u.id)}')">${u.tgid?'ID '+E(u.tgid):E(u.id)} ⧉</span><div class="mu" style="font-size:12px;margin-top:2px">${u.tgid?'Telegram':'Web'+(u.email?' · '+E(u.email):'')}${u.created?' · '+new Date(u.created.seconds*1000).toLocaleDateString('vi-VN'):''}</div></div><div style="text-align:right;flex:none"><div class="pz" style="font-size:15px">${F(u.balance)}</div><button class="bt g s" style="margin-top:6px" onclick="adj('${u.id}')">± Tiền</button> <button class="bt g s" style="margin-top:6px;color:#ff6b6b" onclick="rst('${u.id}')">Reset 0đ</button> <button class="bt g s" style="margin-top:6px;color:#c084fc" onclick="slr('${u.id}')">${u.seller?'👑 Gỡ Seller':'👑 Cấp Seller'}</button> <button class="bt g s" style="margin-top:6px" onclick="uview('${u.id}')">📋 Hoạt động</button>${u.tgid?'':` <button class="bt g s" style="margin-top:6px" onclick="apw('${u.id}')">🔑 Đặt MK</button>`}<br><button class="bt ${u.banned?'ok':'no'} s" style="margin-top:6px" onclick="banU('${u.id}',${!u.banned})">${u.banned?'Mở ban':'Ban'}</button></div></div>`).join('')||'<p class="mu">Không tìm thấy ai.</p>'}
@@ -950,7 +950,7 @@ async function apOne(id,rej){let done=false;
   if(rej)t.update(r,{status:'rejected'});else{t.update(r,{status:'approved'});t.update(db.collection('shop_users').doc(d.data().uid),{balance:FV.increment(d.data().amount)})}});done=true}catch(e){return false}
  if(done){try{const d=(await db.collection('shop_topups').doc(id).get()).data(),ud=(await db.collection('shop_users').doc(d.uid).get()).data()||{};
   if(!rej){await logBal(d.uid,d.amount,'topup','Nạp tiền duyệt #'+id.slice(0,6),U.id);if(ud.email)mailNotify('topup_ok',{amount:d.amount,note:d.note||''},ud.email)}
-  notifyAdmin((rej?'❌ Đơn nạp bị từ chối: ':'✅ Đã duyệt nạp: ')+(ud.name||d.name||d.uid)+' · '+F(d.amount)+' · '+(d.note||id));
+  notifyAdmin((rej?'❌ Đơn nạp bị từ chối: ':'✅ Đã duyệt nạp: ')+(ud.name||d.name||d.uid)+' · '+Fv(d.amount)+' · '+(d.note||id));
  }catch(e){}}
  return done}
 async function ap(id,rej){if(!(await apOne(id,rej)))alert('Đơn đã xử lý');adm('tp')}
@@ -1002,7 +1002,7 @@ function editPf(){IMG=U.photo||'';modal(`<h3>Sửa hồ sơ</h3><label class="lb
 async function savePf(){const n=$('#pnm').value.trim();if(!n)return $('#e').textContent='Nhập tên';if(IMG.length>300000)return $('#e').textContent='Ảnh quá nặng';
  try{await db.collection('shop_users').doc(U.id).update({name:n,photo:IMG||''});closeM();toast('Đã lưu hồ sơ');go('me')}catch(e){$('#e').textContent='Lỗi, thử lại'}}
 function chPw(){modal(`<h3>Đổi mật khẩu</h3><input id="o" type="password" placeholder="Mật khẩu hiện tại"><input id="p" type="password" inputmode="numeric" maxlength="6" placeholder="Mật khẩu mới (6 số)"><input id="p2" type="password" inputmode="numeric" maxlength="6" placeholder="Nhập lại"><div class="r" style="margin-top:12px"><button class="bt gd" onclick="savePw()">Đổi</button><button class="bt g" onclick="closeM()">Hủy</button></div><p id="e" class="err"></p>`)}
-async function savePw(){const e=$('#e'),o=$('#o').value,p=$('#p').value,em=U.id.startsWith('e_')?U.id.slice(2):null;
+async function savePw(){const e=$('#e'),o=$('#o').value,p=$('#p').value,em=pwk(U.id);
  if(!/^\d{6}$/.test(p))return e.textContent='Mật khẩu mới phải đúng 6 số';if(p!==$('#p2').value)return e.textContent='Hai mật khẩu không khớp';
  try{const h=U.pwv==2&&em?await sha('v2:'+em+':'+o):await sha(o);if(h!==U.pw)return e.textContent='Sai mật khẩu hiện tại';
   await db.collection('shop_users').doc(U.id).update(em?{pw:await sha('v2:'+em+':'+p),pwv:2}:{pw:await sha(p)});closeM();toast('Đã đổi mật khẩu')}catch(x){e.textContent='Lỗi, thử lại'}}
@@ -1019,9 +1019,9 @@ async function fpSend(){const e=$('#e'),em=gm($('#em').value);if(!isGm(em))retur
   await mailApi({action:'send_otp',email:em});FP={email:em,uid:account.id,name:account.data.name||account.id};fpUI();toast('Đã gửi mã xác nhận tới Gmail')
  }catch(x){e.textContent=typeof x=='string'?x:'Không gửi được mã'}}
 async function fpDone(){const e=$('#e'),c=$('#cd').value.trim(),p=$('#p').value;if(!/^\d{6}$/.test(c))return e.textContent='Mã gồm 6 số';if(!/^\d{6}$/.test(p))return e.textContent='Mật khẩu phải đúng 6 số';if(p!==$('#p2').value)return e.textContent='Hai mật khẩu không khớp';e.textContent='Đang kiểm tra...';
- try{await mailApi({action:'verify_otp',email:FP.email,code:c});await db.collection('shop_users').doc(FP.uid).update({pw:await sha('v2:'+FP.email+':'+p),pwv:2});FP=null;toast('Khôi phục thành công, hãy đăng nhập lại');auth('login')}catch(x){e.textContent=typeof x=='string'?x:'Lỗi, thử lại'}}
+ try{await mailApi({action:'verify_otp',email:FP.email,code:c});await db.collection('shop_users').doc(FP.uid).update({pw:await sha('v2:'+pwk(FP.uid)+':'+p),pwv:2});FP=null;toast('Khôi phục thành công, hãy đăng nhập lại');auth('login')}catch(x){e.textContent=typeof x=='string'?x:'Lỗi, thử lại'}}
 async function apw(id){const u=USERS.find(x=>x.id==id);if(!u||!u.email)return alert('Chỉ áp dụng cho tài khoản Gmail');const p=prompt('Đặt mật khẩu mới (6 số) cho '+u.email,'');if(p===null)return;if(!/^\d{6}$/.test(p))return alert('Phải đúng 6 số');
- await db.collection('shop_users').doc(id).update({pw:await sha('v2:'+u.email+':'+p),pwv:2});toast('Đã đặt mật khẩu mới')}
+ await db.collection('shop_users').doc(id).update({pw:await sha('v2:'+pwk(id)+':'+p),pwv:2});toast('Đã đặt mật khẩu mới')}
 async function uview(id){const u=USERS.find(x=>x.id==id)||{id};modal('<div class="empty">Đang tải...</div>');
  try{const [o,l]=await Promise.all([db.collection('shop_orders').where('uid','==',id).get(),db.collection('shop_bal_logs').where('uid','==',id).get()]);
   const O=o.docs.map(d=>d.data()).sort((a,b)=>tsMs(b)-tsMs(a)).slice(0,30),L=l.docs.map(d=>d.data()).sort((a,b)=>tsMs(b)-tsMs(a)).slice(0,30),dt=x=>x.ts&&x.ts.seconds?new Date(x.ts.seconds*1000).toLocaleString('vi-VN'):'';
@@ -1031,5 +1031,49 @@ async function uview(id){const u=USERS.find(x=>x.id==id)||{id};modal('<div class
   <h3 style="margin-top:12px">Biến động số dư</h3>${L.map(x=>`<div class="row"><div class="inf"><b>${E(x.note||x.type)}</b><span class="mu">${dt(x)}</span></div><b class="pz" style="font-size:14px;color:${x.amount>=0?'var(--ok)':'var(--no)'}">${x.amount>=0?'+':''}${F(x.amount)}</b></div>`).join('')||'<p class="mu">Chưa có.</p>'}
   <button class="bt g" style="margin-top:12px" onclick="closeM()">Đóng</button>`)}catch(e){modal('<p class="err">Lỗi tải dữ liệu</p><button class="bt g" onclick="closeM()">Đóng</button>')}}
 setInterval(()=>{document.querySelectorAll('[data-e]').forEach(e=>{const r=+e.dataset.e-Date.now();if(r<=0){e.remove();return}const t=Math.floor(r/1000),h=Math.floor(t/3600);e.querySelector('i').textContent=(h>=24?Math.floor(h/24)+'d ':'')+p2(h%24)+':'+p2(Math.floor(t/60)%60)+':'+p2(t%60)})},1000);
+let RATE={en:25000,zh:3500},TW=null;
+const CUR={vi:['vi-VN','đ'],en:['en-US','$'],zh:['zh-CN','¥']};
+function money(n){const v=Number(n||0);if(SHOP_LANG=='vi'||!RATE[SHOP_LANG])return Fv(v);const x=v/RATE[SHOP_LANG];return CUR[SHOP_LANG][1]+x.toLocaleString(CUR[SHOP_LANG][0],{minimumFractionDigits:2,maximumFractionDigits:2})}
+const Fv=n=>Number(n||0).toLocaleString('vi-VN')+'đ';
+const pwk=id=>String(id).replace(/^[eu]_/,'');
+const I18N=[["Cửa Hàng","Shop","商店"],["Nạp Tiền","Top up","充值"],["Top Nạp","Top Deposits","充值排行"],["Cá Nhân","Profile","个人中心"],["Admin","Admin","管理"],
+["Đăng nhập","Log in","登录"],["Đăng ký","Sign up","注册"],["Đăng xuất","Log out","退出登录"],["Mua Tài Khoản","Buy Accounts","购买账号"],["Mua Account uy tín, chất lượng","Trusted, quality accounts","信誉好，质量高"],
+["Chọn dịch vụ / Game","Choose service / game","选择服务 / 游戏"],["Chọn mục","Choose item","选择项目"],["Chọn gói","Choose a plan","选择套餐"],["Đã chọn xong","Selected","已选择"],["GIAO DỊCH GẦN ĐÂY","RECENT ACTIVITY","最近交易"],
+["Xác nhận mua","Confirm purchase","确认购买"],["Nhận ngay","Get now","立即领取"],["Hủy","Cancel","取消"],["Tổng cộng","Total","合计"],["Lưu ý khi mua","Notes before buying","购买须知"],
+["Số dư","Balance","余额"],["Nạp tiền","Top up","充值"],["Tạo mã QR","Create QR code","生成二维码"],["Chọn số tiền","Choose amount","选择金额"],["ID của bạn","Your ID","你的ID"],
+["Mật khẩu","Password","密码"],["Quên mật khẩu?","Forgot password?","忘记密码？"],["Gửi mã","Send code","发送验证码"],["Gửi mã xác nhận","Send verification code","发送验证码"],["Vào shop","Enter shop","进入商店"],
+["Lịch Sử","History","历史"],["Đơn Hàng","Orders","订单"],["Của tôi","Mine","我的"],["Mọi người","Everyone","所有人"],["Sao chép","Copy","复制"],["Sao chép ID","Copy ID","复制ID"],["Đóng","Close","关闭"],
+["✅ Thành công","✅ Success","✅ 成功"],["Nạp tiền thành công!","Top-up successful!","充值成功！"],["Đi mua hàng","Go shopping","去购物"],["Khách nạp nhiều nhất","Biggest depositors","充值最多的用户"],
+["Hôm nay","Today","今天"],["7 ngày","7 days","7天"],["Tháng này","This month","本月"],["Tất cả","All","全部"],["Chưa có sản phẩm nào","No products yet","暂无商品"],["Quay lại sau nhé.","Please come back later.","请稍后再来。"],
+["Hết hàng","Sold out","售罄"],["Hết","Out","无货"],["Đang tải...","Loading...","加载中..."],["Đang tải kho hàng...","Loading products...","正在加载商品..."],["Sửa hồ sơ","Edit profile","编辑资料"],["Đổi mật khẩu","Change password","修改密码"],
+["Đơn hàng đã mua","Purchased orders","已购订单"],["Nhập mã giảm giá / Giftcode","Discount code / Giftcode","优惠码 / 礼品码"],["Áp dụng","Apply","使用"],["Từ","From","起"],["Kho:","Stock:","库存:"],
+["mua","bought","购买了"],["nạp","deposited","充值了"],["đã mua","bought","购买了"],["đã nạp","deposited","充值了"],["vừa xong","just now","刚刚"],["Miễn phí","Free","免费"],["(bạn)","(you)","(你)"],
+["Chưa có giao dịch.","No activity yet.","暂无交易。"],["Chưa có ai nạp","No deposits yet","暂无充值"],["Hãy là người đầu tiên.","Be the first.","成为第一个吧。"],["Chưa có đơn nào","No orders yet","暂无订单"],
+["Vào Mua Đồ chọn món đầu tiên.","Pick your first item in the shop.","去商店选购第一件商品。"],["Đồ bạn đã mua nằm ở đây.","Everything you bought is here.","你购买的商品都在这里。"],
+["Mua và nạp gần đây của mọi người.","Recent purchases and top-ups.","大家最近的购买与充值。"],["Nạp tiền vào ví","Wallet top-up","钱包充值"],["Chuyển khoản qua mã QR, bot duyệt tự động là tiền tự vào.","Pay by QR transfer; money arrives once approved.","扫码转账，审核通过后自动到账。"],
+["Hủy đơn này","Cancel this order","取消此订单"],["Liên kết Gmail","Link Gmail","绑定Gmail"],["Quên mật khẩu","Forgot password","忘记密码"],["Đặt lại mật khẩu","Reset password","重置密码"],["Đặt lại","Reset","重置"],["Gửi lại mã","Resend code","重新发送"],
+["Nhận thông báo đơn hàng, nạp tiền qua Gmail.","Get order and top-up alerts by Gmail.","通过Gmail接收订单和充值通知。"],["Hết hạn","Expired","已过期"],["Nhập mã...","Enter code...","输入代码..."],["Số tiền (tối thiểu 2.000đ)","Amount in VND (min 2,000đ)","金额（越南盾，最低2,000đ）"],
+["Gmail (hoặc tên đăng nhập cũ)","Gmail (or old username)","Gmail（或旧用户名）"],["Mật khẩu 6 chữ số","6-digit password","6位数字密码"],["Nhập lại mật khẩu","Repeat password","再次输入密码"],["Tìm theo tên, ID, @username...","Search name, ID, @username...","按名称、ID、@用户名搜索..."]];
+const IP=[[/^(\d+) mục$/,'$1 items','$1 项'],[/^(\d+) gói · Kho$/,'$1 plans · Stock','$1 个套餐 · 库存'],[/^Còn (\d+)$/,'$1 left','剩余 $1'],[/^(\d+) lần nạp$/,'$1 deposits','$1 次充值'],
+[/^(\d+) phút trước$/,'$1 min ago','$1 分钟前'],[/^(\d+) giờ trước$/,'$1 h ago','$1 小时前'],[/^(\d+) ngày trước$/,'$1 d ago','$1 天前'],[/^Số lượng$/,'Quantity','数量'],[/^Hạng của bạn:?$/,'Your rank','你的排名']];
+const LD={},LI={en:1,zh:2};I18N.forEach(r=>LD[r[0]]=r);
+function trs(s){if(SHOP_LANG=='vi')return s;const t=s.trim();if(!t)return s;const k=LI[SHOP_LANG];let r=LD[t];if(r)return s.replace(t,r[k]);
+ const a=t.replace(/^[^\p{L}\p{N}]+/u,''),pre=t.slice(0,t.length-a.length);r=LD[a];if(r)return s.replace(t,pre+r[k]);
+ for(const p of IP)if(p[0].test(t))return s.replace(t,t.replace(p[0],p[k]));return s}
+let TRB=0;
+function trAll(){if(SHOP_LANG=='vi')return;TRB=1;const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+ while(n=w.nextNode()){const p=n.parentNode;if(p&&/SCRIPT|STYLE|OPTION/.test(p.nodeName))continue;const v=trs(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v}
+ document.querySelectorAll('[placeholder]').forEach(e=>{const o=e.getAttribute('placeholder'),v=trs(o);if(v!==o)e.setAttribute('placeholder',v)});TRB=0}
+new MutationObserver(()=>{if(!TRB)trAll()}).observe(document.body,{childList:true,subtree:true,characterData:true});
+async function loadRate(){try{const d=await db.collection('shop_settings').doc('rate').get();if(d.exists){const x=d.data();if(+x.en>0)RATE.en=+x.en;if(+x.zh>0)RATE.zh=+x.zh;if(SHOP_LANG!='vi'){hd();go(TAB)}}}catch(e){}}
+async function saveRate(){const o={en:+$('#re').value||25000,zh:+$('#rz').value||3500};try{await db.collection('shop_settings').doc('rate').set(o);RATE={...RATE,...o};toast('Đã lưu tỷ giá')}catch(e){toast('Lỗi')}}
+// ===== thông báo nạp thành công ở mọi trang =====
+function watchTop(id){if(TW)TW();let first=true;
+ TW=db.collection('shop_topups').where('uid','==',id).onSnapshot(s=>{if(first){first=false;return}
+  s.docChanges().forEach(c=>{if(c.type!=='modified')return;const d=c.doc.data();
+   if(d.status==='approved'){modal(`<div class="tpok"><div class="ck">✓</div><h3>Nạp tiền thành công!</h3><p>Đã cộng <b style="color:var(--ok)">${F(d.amount)}</b> vào ví của bạn.</p><button class="bt gd s" style="margin:8px auto 0;max-width:200px" onclick="closeM();go('shop')">Đi mua hàng</button></div>`);toast('+'+F(d.amount))}
+   else if(d.status==='rejected')toast('Đơn nạp bị từ chối')})},()=>{})}
+I18N.push(["Cảnh báo giá nguồn tăng:","Source price increase warning:","货源涨价警告："],["Khôi phục tài khoản / mật khẩu","Recover account / password","找回账号 / 密码"],["Gửi mã xác nhận","Send verification code","发送验证码"],["Đang bảo trì","Under maintenance","维护中"]);I18N.forEach(r=>LD[r[0]]=r);
+document.documentElement.lang=SHOP_LANG;loadRate();
 init();
 </script></body></html>
